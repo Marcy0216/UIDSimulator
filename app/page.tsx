@@ -1,0 +1,32 @@
+'use client';
+import { ChangeEvent, DragEvent, useMemo, useRef, useState } from 'react';
+
+type Drop = { uid:number; rarity:'Legendary'|'Mythical'; itemId:string };
+const sample:Drop[]=[
+ {uid:1842051,rarity:'Legendary',itemId:'sword_long'},
+ {uid:1842057,rarity:'Mythical',itemId:'bow_elven'},
+ {uid:1842064,rarity:'Legendary',itemId:'shield_kite'},
+ {uid:1842079,rarity:'Legendary',itemId:'staff_ether'}
+];
+
+function columns(line:string){const out:string[]=[];let value='',quoted=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(quoted&&line[i+1]==='"'){value+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){out.push(value);value='';}else value+=c;}out.push(value);return out;}
+async function parse(files:File[]){const drops:Drop[]=[];let invalid=0;for(const file of files){for(const line of (await file.text()).replace(/^\uFEFF/,'').split(/\r?\n/)){if(!line.trim()||line.toLowerCase().startsWith('uid,'))continue;const [u,r,...rest]=columns(line),uid=Number(u),v=r?.trim().toLowerCase();const rarity=v==='mythical'||v==='1'?'Mythical':v==='legendary'||v==='0'?'Legendary':null,itemId=rest.join(',').trim();if(!Number.isSafeInteger(uid)||!rarity||!itemId){invalid++;continue;}drops.push({uid,rarity,itemId});}}drops.sort((a,b)=>a.uid-b.uid);return{drops,invalid};}
+
+export default function Home(){
+ const input=useRef<HTMLInputElement>(null);const [drops,setDrops]=useState<Drop[]>([]);const [loading,setLoading]=useState(false);const [drag,setDrag]=useState(false);const [status,setStatus]=useState('');const [current,setCurrent]=useState(1842050);const [advance,setAdvance]=useState(0);const [rarity,setRarity]=useState('All');const [query,setQuery]=useState('');const [limit,setLimit]=useState(50);const source=drops.length?drops:sample,position=current+advance;
+ const matches=useMemo(()=>source.filter(d=>d.uid>=position&&(rarity==='All'||d.rarity===rarity)&&d.itemId.toLowerCase().includes(query.toLowerCase())).slice(0,limit),[source,position,rarity,query,limit]);
+ async function load(list:FileList|File[]){const files=Array.from(list).filter(f=>f.name.toLowerCase().endsWith('.csv'));if(!files.length)return;setLoading(true);try{const result=await parse(files);setDrops(result.drops);setStatus(`${files.length}ファイル・${result.drops.toLocaleString()}行を読み込み${result.invalid?`（${result.invalid}行除外）`:''}`);if(result.drops.length){setCurrent(result.drops[0].uid);setAdvance(0);}}finally{setLoading(false);setDrag(false);}}
+ function fileChange(e:ChangeEvent<HTMLInputElement>){if(e.target.files)void load(e.target.files)}function drop(e:DragEvent<HTMLDivElement>){e.preventDefault();void load(e.dataTransfer.files)}
+ const mythical=source.filter(d=>d.rarity==='Mythical').length;
+ return <main>
+  <header><div className="brand"><b>U</b>UID Simulator</div><div className="privacy"><i/>ローカル処理のみ</div></header>
+  <section className="hero"><div><p className="eyebrow">ELIN DROP FORECAST</p><h1>次のドロップを、<br/><em>UIDから先読み。</em></h1><p className="lead">UID ScannerのCSVを読み込み、現在位置から先の装備候補をすばやく探索できます。</p></div>
+   <div className={`dropzone ${drag?'drag':''}`} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={drop} onClick={()=>input.current?.click()} role="button" tabIndex={0} onKeyDown={e=>(e.key==='Enter'||e.key===' ')&&input.current?.click()}><input ref={input} hidden type="file" accept=".csv" multiple onChange={fileChange}/><span>↑</span><strong>{loading?'CSVを解析中…':'CSVをここにドロップ'}</strong><small>クリック選択・複数ファイル対応<br/>データは外部へ送信されません</small></div>
+  </section>
+  <section className="workspace"><aside className="panel controls"><Title n="01" text="シミュレーション"/><label>現在のUID<input type="number" value={current} onChange={e=>setCurrent(Number(e.target.value)||0)}/></label><label>消費するUID<input type="number" min="0" value={advance} onChange={e=>setAdvance(Math.max(0,Number(e.target.value)||0))}/></label><div className="quick">{[1,10,100].map(n=><button key={n} onClick={()=>setAdvance(v=>v+n)}>+{n}</button>)}<button onClick={()=>setAdvance(0)}>Reset</button></div><div className="position"><small>シミュレーション位置</small><b>{position.toLocaleString()}</b><small>基準 + {advance.toLocaleString()}</small></div><Title n="02" text="フィルター" second/><label>レアリティ<select value={rarity} onChange={e=>setRarity(e.target.value)}><option>All</option><option>Legendary</option><option>Mythical</option></select></label><label>アイテムID<input type="search" placeholder="例: sword" value={query} onChange={e=>setQuery(e.target.value)}/></label><label>表示件数<select value={limit} onChange={e=>setLimit(Number(e.target.value))}>{[25,50,100,250].map(n=><option key={n}>{n}</option>)}</select></label></aside>
+   <section className="panel results"><div className="results-head"><div><p className="eyebrow">FORECAST RESULTS</p><h2>この先のドロップ</h2></div><small>{matches.length} 件表示</small></div><div className="stats"><Stat label="読み込み行" value={source.length.toLocaleString()}/><Stat label="Mythical" value={mythical.toLocaleString()} violet/><Stat label="次の候補まで" value={matches[0]?`+${(matches[0].uid-position).toLocaleString()}`:'—'}/></div>{status&&<div className="status">✓　{status}</div>}<div className="table"><table><thead><tr><th>あと</th><th>UID</th><th>レアリティ</th><th>アイテムID</th><th/></tr></thead><tbody>{matches.map((d,i)=><tr key={`${d.uid}-${i}`}><td className="delta">+{(d.uid-position).toLocaleString()}</td><td className="mono">{d.uid.toLocaleString()}</td><td><span className={`rarity ${d.rarity.toLowerCase()}`}>{d.rarity}</span></td><td className="item">{d.itemId}</td><td><button className="jump" onClick={()=>setAdvance(d.uid-current)}>→</button></td></tr>)}</tbody></table>{!matches.length&&<div className="empty">条件に一致するドロップがありません</div>}</div>{!drops.length&&<p className="demo">サンプルデータを表示中です</p>}</section>
+  </section>
+ </main>
+}
+function Title({n,text,second=false}:{n:string;text:string;second?:boolean}){return <div className={`title ${second?'second':''}`}><span>{n}</span><h2>{text}</h2></div>}
+function Stat({label,value,violet=false}:{label:string;value:string;violet?:boolean}){return <div><small>{label}</small><b className={violet?'violet':''}>{value}</b></div>}
