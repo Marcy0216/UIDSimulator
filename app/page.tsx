@@ -25,9 +25,11 @@ export default function Home() {
     if (!Number.isInteger(first) || first < 1 || first > 2147483647) return setMessage("開始UIDは1〜2,147,483,647で指定してください。");
     if (!Number.isInteger(amount) || amount < 1 || amount > 10000000 || first + amount - 1 > 2147483647) return setMessage("検索するUID数は1〜10,000,000、かつUID上限内で指定してください。");
     if (query.trim()) return setMessage("入力中の装備を候補から選択してください。");
-    if (!manifest?.shards.length) return setMessage("検索データは準備中です。");
+    const activeManifest = manifest ?? await loadManifest(window.location.href);
+    if (!activeManifest?.shards.length) return setMessage("検索データを読み込めませんでした。ページを再読み込みしてください。");
+    if (activeManifest !== manifest) setManifest(activeManifest);
     setLoading(true);
-    try { const rows = await loadForecast(manifest, first, amount, 5000, rarity, selected.map((item) => item.id)); setResults(rows); setMessage(rows.length ? `${rows.length.toLocaleString()}件見つかりました` : "条件に一致する装備はありませんでした"); }
+    try { const rows = await loadForecast(activeManifest, first, amount, 5000, rarity, selected.map((item) => item.id)); setResults(rows); setMessage(rows.length ? `${rows.length.toLocaleString()}件見つかりました` : "条件に一致する装備はありませんでした"); }
     catch { setMessage("検索データを読み込めませんでした。しばらくしてから再度お試しください。"); }
     finally { setLoading(false); }
   }

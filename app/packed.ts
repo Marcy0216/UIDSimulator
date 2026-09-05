@@ -43,7 +43,9 @@ function decode(bytes: Uint8Array, fromUid: number, toUid: number, limit: number
 }
 
 export async function loadManifest(base: string): Promise<Manifest | null> {
-  const response = await fetch(new URL("data/manifest.json", base));
+  const url = new URL("data/manifest.json", base);
+  url.searchParams.set("v", Date.now().toString());
+  const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) return null;
   const value = await response.json() as Partial<Manifest>;
   return value?.formatVersion === 1 && Array.isArray(value.shards) ? value as Manifest : null;
