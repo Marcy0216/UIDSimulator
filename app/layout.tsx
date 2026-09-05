@@ -2,18 +2,18 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'UID Simulator — Elin Drop Forecast',
-  description: 'UID ScannerのCSVからElinの装備ドロップ候補を探索するシミュレーター。',
+  title: '装備抽選シミュレーター — Elin',
+  description: '装備とレアリティを選んで、圧縮済みスキャンデータから条件に合うUIDを検索できます。',
   metadataBase: new URL('https://uid-simulator-elin.ardent-crumb-7770.chatgpt.site'),
   openGraph: {
-    title: 'UID Simulator',
-    description: 'Elin Drop Forecast — CSVから次の装備ドロップをUIDで先読み。',
+    title: '装備抽選シミュレーター — Elin',
+    description: '装備とレアリティからUIDを検索。',
     images: ['/og.png'],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'UID Simulator',
-    description: 'Elin Drop Forecast — CSVから次の装備ドロップをUIDで先読み。',
+    title: '装備抽選シミュレーター — Elin',
+    description: '装備とレアリティからUIDを検索。',
     images: ['/og.png'],
   },
 };

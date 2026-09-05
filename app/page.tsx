@@ -1,35 +1,37 @@
-'use client';
-import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { loadForecast, loadManifest, Manifest } from './packed';
+"use client";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { loadForecast, loadManifest, Manifest, PackedDrop } from "./packed";
 
-type Drop = { uid:number; rarity:'Legendary'|'Mythical'; itemId:string };
-const sample:Drop[]=[
- {uid:1842051,rarity:'Legendary',itemId:'sword_long'},
- {uid:1842057,rarity:'Mythical',itemId:'bow_elven'},
- {uid:1842064,rarity:'Legendary',itemId:'shield_kite'},
- {uid:1842079,rarity:'Legendary',itemId:'staff_ether'}
-];
+type Item = { id: string; name: string };
+function parseNumber(value: string) { const text = value.normalize("NFKC").replace(/[,_\s]/g, ""); const man = text.match(/^(\d+(?:\.\d+)?)万$/); return man ? Number(man[1]) * 10000 : Number(text); }
 
-function columns(line:string){const out:string[]=[];let value='',quoted=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(quoted&&line[i+1]==='"'){value+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){out.push(value);value='';}else value+=c;}out.push(value);return out;}
-async function parse(files:File[]){const drops:Drop[]=[];let invalid=0;for(const file of files){for(const line of (await file.text()).replace(/^\uFEFF/,'').split(/\r?\n/)){if(!line.trim()||line.toLowerCase().startsWith('uid,'))continue;const [u,r,...rest]=columns(line),uid=Number(u),v=r?.trim().toLowerCase();const rarity=v==='mythical'||v==='1'?'Mythical':v==='legendary'||v==='0'?'Legendary':null,itemId=rest.join(',').trim();if(!Number.isSafeInteger(uid)||!rarity||!itemId){invalid++;continue;}drops.push({uid,rarity,itemId});}}drops.sort((a,b)=>a.uid-b.uid);return{drops,invalid};}
-
-export default function Home(){
- const input=useRef<HTMLInputElement>(null);const [drops,setDrops]=useState<Drop[]>([]);const [remoteDrops,setRemoteDrops]=useState<Drop[]>([]);const [manifest,setManifest]=useState<Manifest|null>(null);const [loading,setLoading]=useState(false);const [drag,setDrag]=useState(false);const [status,setStatus]=useState('');const [current,setCurrent]=useState(1);const [advance,setAdvance]=useState(0);const [rarity,setRarity]=useState('All');const [query,setQuery]=useState('');const [limit,setLimit]=useState(50);const source=drops.length?drops:manifest?.shards.length?remoteDrops:sample,position=Math.min(2147483647,current+advance);
- const matches=useMemo(()=>source.filter(d=>d.uid>=position&&(rarity==='All'||d.rarity===rarity)&&d.itemId.toLowerCase().includes(query.toLowerCase())).slice(0,limit),[source,position,rarity,query,limit]);
- useEffect(()=>{loadManifest(document.baseURI).then(setManifest).catch(()=>setManifest(null))},[]);
- useEffect(()=>{if(!manifest||!manifest.shards.length||drops.length)return;let active=true;setLoading(true);loadForecast(manifest,position,limit,rarity,query).then(rows=>{if(active){setRemoteDrops(rows);setStatus(`ReleaseからUID ${position.toLocaleString()}以降を読み込み`)}}).catch(()=>{if(active)setStatus('Releaseデータを取得できませんでした')}).finally(()=>active&&setLoading(false));return()=>{active=false}},[manifest,position,limit,rarity,query,drops.length]);
- async function load(list:FileList|File[]){const files=Array.from(list).filter(f=>f.name.toLowerCase().endsWith('.csv'));if(!files.length)return;setLoading(true);try{const result=await parse(files);setDrops(result.drops);setStatus(`${files.length}ファイル・${result.drops.toLocaleString()}行を読み込み${result.invalid?`（${result.invalid}行除外）`:''}`);if(result.drops.length){setCurrent(result.drops[0].uid);setAdvance(0);}}finally{setLoading(false);setDrag(false);}}
- function fileChange(e:ChangeEvent<HTMLInputElement>){if(e.target.files)void load(e.target.files)}function drop(e:DragEvent<HTMLDivElement>){e.preventDefault();void load(e.dataTransfer.files)}
- const mythical=source.filter(d=>d.rarity==='Mythical').length;
- return <main>
-  <header><div className="brand"><b>U</b>UID Simulator</div><div className="privacy"><i/>GitHub CSV / ローカル処理</div></header>
-  <section className="hero"><div><p className="eyebrow">ELIN DROP FORECAST</p><h1>次のドロップを、<br/><em>UIDから先読み。</em></h1><p className="lead">UID ScannerのCSVを読み込み、現在位置から先の装備候補をすばやく探索できます。</p></div>
-   <div className={`dropzone ${drag?'drag':''}`} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={drop} onClick={()=>input.current?.click()} role="button" tabIndex={0} onKeyDown={e=>(e.key==='Enter'||e.key===' ')&&input.current?.click()}><input ref={input} hidden type="file" accept=".csv" multiple onChange={fileChange}/><span>↑</span><strong>{loading?'データを解析中…':manifest?.shards.length?'圧縮データ接続済み':'CSVをここにドロップ'}</strong><small>{manifest?.shards.length?'UIDに必要な分割だけ取得します':'クリック選択・複数ファイル対応'}<br/>ローカルCSVは外部へ送信されません</small></div>
-  </section>
-  <section className="workspace"><aside className="panel controls"><Title n="01" text="シミュレーション"/><label>現在のUID<input type="number" value={current} onChange={e=>setCurrent(Number(e.target.value)||0)}/></label><label>消費するUID<input type="number" min="0" value={advance} onChange={e=>setAdvance(Math.max(0,Number(e.target.value)||0))}/></label><div className="quick">{[1,10,100].map(n=><button key={n} onClick={()=>setAdvance(v=>v+n)}>+{n}</button>)}<button onClick={()=>setAdvance(0)}>Reset</button></div><div className="position"><small>シミュレーション位置</small><b>{position.toLocaleString()}</b><small>基準 + {advance.toLocaleString()}</small></div><Title n="02" text="フィルター" second/><label>レアリティ<select value={rarity} onChange={e=>setRarity(e.target.value)}><option>All</option><option>Legendary</option><option>Mythical</option></select></label><label>アイテムID<input type="search" placeholder="例: sword" value={query} onChange={e=>setQuery(e.target.value)}/></label><label>表示件数<select value={limit} onChange={e=>setLimit(Number(e.target.value))}>{[25,50,100,250].map(n=><option key={n}>{n}</option>)}</select></label></aside>
-   <section className="panel results"><div className="results-head"><div><p className="eyebrow">FORECAST RESULTS</p><h2>この先のドロップ</h2></div><small>{matches.length} 件表示</small></div><div className="stats"><Stat label="全データ行" value={(manifest?.totalRecords||source.length).toLocaleString()}/><Stat label="表示中Mythical" value={mythical.toLocaleString()} violet/><Stat label="次の候補まで" value={matches[0]?`+${(matches[0].uid-position).toLocaleString()}`:'—'}/></div>{status&&<div className="status">✓　{status}</div>}<div className="table"><table><thead><tr><th>あと</th><th>UID</th><th>レアリティ</th><th>アイテムID</th><th/></tr></thead><tbody>{matches.map((d,i)=><tr key={`${d.uid}-${i}`}><td className="delta">+{(d.uid-position).toLocaleString()}</td><td className="mono">{d.uid.toLocaleString()}</td><td><span className={`rarity ${d.rarity.toLowerCase()}`}>{d.rarity}</span></td><td className="item">{d.itemId}</td><td><button className="jump" onClick={()=>setAdvance(d.uid-current)}>→</button></td></tr>)}</tbody></table>{!matches.length&&<div className="empty">条件に一致するドロップがありません</div>}</div>{!drops.length&&!remoteDrops.length&&<p className="demo">圧縮データ未配置のためサンプル表示中です</p>}</section>
-  </section>
- </main>
+export default function Home() {
+  const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [selected, setSelected] = useState<Item[]>([]);
+  const [query, setQuery] = useState("");
+  const [rarity, setRarity] = useState<"All" | "Legendary" | "Mythical">("All");
+  const [start, setStart] = useState("1");
+  const [count, setCount] = useState("1000000");
+  const [results, setResults] = useState<PackedDrop[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => { loadManifest(window.location.href).then(setManifest); fetch(new URL("eq-items.json", window.location.href)).then((r) => r.json() as Promise<Item[]>).then(setItems).catch(() => setItems([])); }, []);
+  const names = useMemo(() => new Map(items.map((item) => [item.id, item.name])), [items]);
+  const suggestions = useMemo(() => { const q = query.trim().toLowerCase(), chosen = new Set(selected.map((item) => item.id)); return q ? items.filter((item) => !chosen.has(item.id) && (item.name.toLowerCase().includes(q) || item.id.toLowerCase().includes(q))).slice(0, 8) : []; }, [items, query, selected]);
+  async function search(event: FormEvent) {
+    event.preventDefault(); setMessage("");
+    const first = parseNumber(start), amount = parseNumber(count);
+    if (!Number.isInteger(first) || first < 1 || first > 2147483647) return setMessage("開始UIDは1〜2,147,483,647で指定してください。");
+    if (!Number.isInteger(amount) || amount < 1 || amount > 10000000 || first + amount - 1 > 2147483647) return setMessage("検索するUID数は1〜10,000,000、かつUID上限内で指定してください。");
+    if (query.trim()) return setMessage("入力中の装備を候補から選択してください。");
+    if (!manifest?.shards.length) return setMessage("検索データは準備中です。");
+    setLoading(true);
+    try { const rows = await loadForecast(manifest, first, amount, 5000, rarity, selected.map((item) => item.id)); setResults(rows); setMessage(rows.length ? `${rows.length.toLocaleString()}件見つかりました` : "条件に一致する装備はありませんでした"); }
+    catch { setMessage("検索データを読み込めませんでした。しばらくしてから再度お試しください。"); }
+    finally { setLoading(false); }
+  }
+  return <main><header className="hero"><nav><span className="brand"><i /> UID装備検索</span><span className="beta">試験版</span></nav><div className="hero-copy"><p className="eyebrow">ELIN UID SIMULATOR</p><h1>装備抽選<br /><em>シミュレーター</em></h1><p className="lede">装備とレアリティを選び、指定した範囲から条件に合うUIDを検索できます。</p></div></header>
+    <section className="workspace"><form onSubmit={search} className="control-panel"><div className="section-label"><span>01</span> 検索条件</div><label>狙う装備<input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="装備名を入力して追加" autoComplete="off" /></label>{suggestions.length > 0 && <div className="suggestions">{suggestions.map((item) => <button type="button" key={item.id} onClick={() => { setSelected((current) => [...current, item]); setQuery(""); }}><span>{item.name || item.id}</span></button>)}</div>}{selected.length > 0 && <div className="chips">{selected.map((item) => <button type="button" key={item.id} onClick={() => setSelected((current) => current.filter((value) => value.id !== item.id))}>{item.name || item.id}<span>×</span></button>)}</div>}<label>レアリティ<select value={rarity} onChange={(e) => setRarity(e.target.value as typeof rarity)}><option value="All">すべて</option><option value="Legendary">奇跡</option><option value="Mythical">神器</option></select></label><label>開始UID<input value={start} onChange={(e) => setStart(e.target.value)} inputMode="numeric" /></label><label>検索するUID数<input value={count} onChange={(e) => setCount(e.target.value)} inputMode="text" /></label><button type="submit" className="run" disabled={loading}>{loading ? "検索中…" : "検索する"}<span>→</span></button>{message && <p className="message">{message}</p>}<p className="hint">最大1,000万UIDまで検索できます</p></form>
+      <div className="result-panel"><div className="section-label"><span>02</span> 検索結果</div><div className="stats"><article><b>{results.length.toLocaleString()}</b><small>見つかったUID</small></article><article><b>{results.filter((row) => row.rarity === "Mythical").length.toLocaleString()}</b><small>神器</small></article><article><b>{results[0] ? `+${(results[0].uid - parseNumber(start)).toLocaleString()}` : "—"}</b><small>次の候補まで</small></article></div><div className="table-wrap">{results.length === 0 ? <div className="empty"><span>◇</span><p>条件を指定して検索してください</p></div> : <table><thead><tr><th>あと</th><th>UID</th><th>レアリティ</th><th>装備</th></tr></thead><tbody>{results.map((row) => <tr key={row.uid}><td className="delta">+{(row.uid - parseNumber(start)).toLocaleString()}</td><td>{row.uid.toLocaleString()}</td><td><mark className={row.rarity.toLowerCase()}>{row.rarity === "Legendary" ? "奇跡" : "神器"}</mark></td><td><strong>{names.get(row.itemId) || row.itemId}</strong></td></tr>)}</tbody></table>}</div>{results.length === 5000 && <p className="limit">先頭5,000件を表示しています</p>}</div></section></main>;
 }
-function Title({n,text,second=false}:{n:string;text:string;second?:boolean}){return <div className={`title ${second?'second':''}`}><span>{n}</span><h2>{text}</h2></div>}
-function Stat({label,value,violet=false}:{label:string;value:string;violet?:boolean}){return <div><small>{label}</small><b className={violet?'violet':''}>{value}</b></div>}
