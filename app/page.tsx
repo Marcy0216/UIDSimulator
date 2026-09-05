@@ -1,5 +1,5 @@
 'use client';
-import { ChangeEvent, DragEvent, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 type Drop = { uid:number; rarity:'Legendary'|'Mythical'; itemId:string };
 const sample:Drop[]=[
@@ -15,11 +15,12 @@ async function parse(files:File[]){const drops:Drop[]=[];let invalid=0;for(const
 export default function Home(){
  const input=useRef<HTMLInputElement>(null);const [drops,setDrops]=useState<Drop[]>([]);const [loading,setLoading]=useState(false);const [drag,setDrag]=useState(false);const [status,setStatus]=useState('');const [current,setCurrent]=useState(1842050);const [advance,setAdvance]=useState(0);const [rarity,setRarity]=useState('All');const [query,setQuery]=useState('');const [limit,setLimit]=useState(50);const source=drops.length?drops:sample,position=current+advance;
  const matches=useMemo(()=>source.filter(d=>d.uid>=position&&(rarity==='All'||d.rarity===rarity)&&d.itemId.toLowerCase().includes(query.toLowerCase())).slice(0,limit),[source,position,rarity,query,limit]);
+ useEffect(()=>{let active=true;(async()=>{try{const root=document.baseURI;const manifest=await fetch(new URL('data/manifest.json',root)).then(r=>r.ok?r.json():[]);if(!Array.isArray(manifest)||!manifest.length)return;const files=await Promise.all(manifest.map(async(name:string)=>new File([await fetch(new URL(`data/${encodeURIComponent(name)}`,root)).then(r=>r.text())],name,{type:'text/csv'})));if(active)await load(files);}catch{/* CSV未配置時はサンプルを表示 */}})();return()=>{active=false}},[]);
  async function load(list:FileList|File[]){const files=Array.from(list).filter(f=>f.name.toLowerCase().endsWith('.csv'));if(!files.length)return;setLoading(true);try{const result=await parse(files);setDrops(result.drops);setStatus(`${files.length}ファイル・${result.drops.toLocaleString()}行を読み込み${result.invalid?`（${result.invalid}行除外）`:''}`);if(result.drops.length){setCurrent(result.drops[0].uid);setAdvance(0);}}finally{setLoading(false);setDrag(false);}}
  function fileChange(e:ChangeEvent<HTMLInputElement>){if(e.target.files)void load(e.target.files)}function drop(e:DragEvent<HTMLDivElement>){e.preventDefault();void load(e.dataTransfer.files)}
  const mythical=source.filter(d=>d.rarity==='Mythical').length;
  return <main>
-  <header><div className="brand"><b>U</b>UID Simulator</div><div className="privacy"><i/>ローカル処理のみ</div></header>
+  <header><div className="brand"><b>U</b>UID Simulator</div><div className="privacy"><i/>GitHub CSV / ローカル処理</div></header>
   <section className="hero"><div><p className="eyebrow">ELIN DROP FORECAST</p><h1>次のドロップを、<br/><em>UIDから先読み。</em></h1><p className="lead">UID ScannerのCSVを読み込み、現在位置から先の装備候補をすばやく探索できます。</p></div>
    <div className={`dropzone ${drag?'drag':''}`} onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={drop} onClick={()=>input.current?.click()} role="button" tabIndex={0} onKeyDown={e=>(e.key==='Enter'||e.key===' ')&&input.current?.click()}><input ref={input} hidden type="file" accept=".csv" multiple onChange={fileChange}/><span>↑</span><strong>{loading?'CSVを解析中…':'CSVをここにドロップ'}</strong><small>クリック選択・複数ファイル対応<br/>データは外部へ送信されません</small></div>
   </section>
