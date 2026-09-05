@@ -1,1 +1,10 @@
-[]
+{
+  "formatVersion": 1,
+  "codec": "zstd",
+  "minUid": 1,
+  "maxUid": 2147483647,
+  "shardSize": 4194304,
+  "totalRecords": 0,
+  "releaseBaseUrl": "https://github.com/Marcy0216/UIDSimulator/releases/download/data-v1",
+  "shards": []
+}
