@@ -21,6 +21,10 @@ jobs:
           cache: npm
       - run: npm install --include=optional
       - run: npm run build
+      - name: Add packed UID data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download data_20260905_2210 --pattern '*.udz' --dir out/packed
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

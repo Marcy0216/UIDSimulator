@@ -55,7 +55,7 @@ export async function loadForecast(manifest: Manifest, fromUid: number, count: n
   const output: PackedDrop[] = [], toUid = Math.min(2147483647, fromUid + count - 1), targets = new Set(itemIds);
   const shards = manifest.shards.filter((shard) => shard.end >= fromUid && shard.start <= toUid);
   for (const shard of shards) {
-    const response = await fetch(`${manifest.releaseBaseUrl}/${encodeURIComponent(shard.file)}`);
+    const response = await fetch(new URL(`packed/${encodeURIComponent(shard.file)}`, window.location.href));
     if (!response.ok) throw new Error(`Shard download failed: ${response.status}`);
     output.push(...decode(new Uint8Array(await response.arrayBuffer()), fromUid, toUid, limit - output.length, rarity, targets));
     if (output.length >= limit) break;
